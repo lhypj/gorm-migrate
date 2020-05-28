@@ -92,28 +92,72 @@ func (m *Migrate) MigrationsEnd(latest string) (end, fn string) {
 	return
 }
 
+func (m *Migrate) diff(exists *Table, target *Table) string {
+	// 写到这我发现，其实autoMigrate也挺好。
+	// 因为只增加字段符合了大数据量的应用场景：减少全表的结构修改，以减少数据服务不可用。
+	// 但是数据量大的话做外键岂不是更难搞。不过也不是所有DB都是大表，emm～怎么衡量，还是要好好思量。
+
+	// todo sth wrong
+	var content string
+	oldField := make(map[string]*Field)
+	newField := make(map[string]*Field)
+	fields := make(map[string]int)
+	tableName := exists.Name
+	for _, field := range exists.Fields {
+		fields[field.Name] = 1
+		oldField[field.Name] = field
+	}
+	for _, field := range target.Fields {
+		fields[field.Name] = 1
+		newField[field.Name] = field
+	}
+	for fn := range fields {
+		o := oldField[fn]
+		n := newField[fn]
+		if o == nil && n != nil {
+			content += m.migrationAddFieldContent(tableName, n.Name, n.Type)
+		}
+		if o != nil && n == nil {
+			content += m.migrationDeleteFieldContent(tableName, o.Name)
+		}
+		if o != nil && n != nil {
+			content += m.migrationAlterFieldContent(tableName, o.Name, o.Type, n.Type)
+		}
+	}
+	return content
+}
+
+func (m *Migrate) migrationAddFieldContent(tableName, fieldName, fileType string) string {
+	// todo with quote?
+	return fmt.Sprintf("\t\t&core.Operation{Action: core.ADDField, TableName: \"%v\", ColumnName: \"%v\", Type: \"%v\"},\n", tableName, fieldName, fileType)
+}
+
+func (m *Migrate) migrationDeleteFieldContent(tableName, fieldName string) string {
+	return fmt.Sprintf("\t\t&core.Operation{Action: core.DeleteField, TableName: \"%v\", ColumnName: \"%v\"},\n", tableName, fieldName)
+}
+
+func (m *Migrate) migrationAlterFieldContent(tableName, fieldName, old, new string) string {
+	return fmt.Sprintf("\t\t&core.Operation{Action: core.AlterField, TableName: \"%v\", ColumnName: \"%v\"}, Type: \"%v\"}, TypeNew: \"%v\"", tableName, fieldName, old, new)
+}
+
 func (m *Migrate) genMigrationFileContent(exists *Table, target *Table) string {
 	var content string
 	if target == nil {
-		// table => None :delete table
 		if exists != nil {
-			// delete model
 			// 如果创建的表未migrate 那么这段语句不会执行。表现的结果是migrate之后表会创建，再次make migrations会remove。
 			content += fmt.Sprintf("&core.Operation{Action: core.DELETETable, TableName: \"%v\"},", exists.Name)
 		}
 		return content
 	}
-	// None => table: create
 	if exists == nil {
 		content = fmt.Sprintf("\t\t&core.Operation{Action: core.ADDTable, TableName: \"%v\"},\n", target.Name)
 		for _, field := range target.Fields {
-			content += fmt.Sprintf("\t\t&core.Operation{Action: core.ADDField, TableName: \"%v\", ColumnName: \"%v\", Type: \"%v\"},\n", target.Name, field.Name, field.Type)
+			content += m.migrationAddFieldContent(target.Name, field.Name, field.Type)
 		}
 	}
-	// old table => new table: diff
 	if exists != nil {
 		if !reflect.DeepEqual(exists, target) {
-			// diff
+			content = m.diff(exists, target)
 		}
 	}
 	return content
@@ -147,7 +191,7 @@ func (m *Migrate) genTablesFromMigrationFiles(migrations interface{}) (map[strin
 	return node.GetTable(), head, nil
 }
 
-func (m *Migrate)indexesAndUniqueIndexes(scope *gorm.Scope) (map[string][]string, map[string][]string) {
+func (m *Migrate) indexesAndUniqueIndexes(scope *gorm.Scope) (map[string][]string, map[string][]string) {
 	var indexes = map[string][]string{}
 	var uniqueIndexes = map[string][]string{}
 
@@ -190,10 +234,10 @@ func (m *Migrate) genTableFromObject(values ...interface{}) (map[string]*Table, 
 		table := &Table{Name: scope.TableName()}
 		for _, structField := range scope.GetStructFields() {
 			field := Field{
-				Name: structField.DBName,
-				Type: scope.Dialect().DataTypeOf(structField),
-				IsPrimary: structField.IsPrimaryKey,
-				IndexNames: indexes[structField.DBName],
+				Name:             structField.DBName,
+				Type:             scope.Dialect().DataTypeOf(structField),
+				IsPrimary:        structField.IsPrimaryKey,
+				IndexNames:       indexes[structField.DBName],
 				UniqueIndexNames: uniqueIndexes[structField.DBName],
 			}
 			table.Fields = append(table.Fields, &field)

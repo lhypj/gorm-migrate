@@ -6,7 +6,7 @@ import (
 
 type CreateTableTest struct {
 	gorm.Model
-	Name string `gorm:"type:varchar(100)"`
+	Name string `gorm:"type:varchar(101)"`
 }
 
 type CreateTableTestV2 struct {
