@@ -11,15 +11,15 @@ import (
 
 func main() {
 
-	db, err := gorm.Open("mysql", "root:zxcvbnm123@tcp(localhost:3306)/TestDb?parseTime=True&loc=Asia%2FShanghai")
+	db, err := gorm.Open("mysql", "root:zxcvbnm123@tcp(localhost:3306)/gomigrate?parseTime=True&loc=Asia%2FShanghai")
 	if err != nil {
 		fmt.Println(err)
 	}
 	defer db.Close()
-	//db.AutoMigrate(&CreateTableTest{})
+	db.AutoMigrate()
 	//todo use conf
 	migrate := core.Migrate{DB: db, ModelsRelativePath: "/models", PackagePath: "migrate/core"}
 	migrate.MigrationsInit()
-	migrate.MakeMigrations(&migrations.Migrations{}, &models.CreateTableTest{}, &models.CreateTableTestV2{})
-	migrate.Migrate()
+	migrate.MakeMigrations(&migrations.Migrations{}, &models.CreateTableTest{})
+	//migrate.Migrate(&migrations.Migrations{})
 }

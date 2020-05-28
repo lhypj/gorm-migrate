@@ -2,9 +2,9 @@ package core
 
 import "github.com/jinzhu/gorm"
 
-type GOrmMigrations struct {
+type OrmMigrations struct {
 	gorm.Model
-	Name string
+	Name string `gorm:"unique;not null;size:30"`
 }
 
 type Migrate struct {
@@ -14,8 +14,11 @@ type Migrate struct {
 }
 
 type Field struct {
-	Name string
-	Type string
+	Name             string
+	Type             string
+	IsPrimary        bool
+	IndexNames       []string
+	UniqueIndexNames []string
 }
 
 type Table struct {

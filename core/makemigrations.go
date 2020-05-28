@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"github.com/jinzhu/gorm"
 	"os"
 	"reflect"
 	"strconv"
@@ -35,18 +36,20 @@ func (m *Migrate) migrationsPath() (string, error) {
 
 func (m *Migrate) MigrationsInit() error {
 	// migrate models
-	m.DB.AutoMigrate(&GOrmMigrations{})
+	m.DB.AutoMigrate(&OrmMigrations{})
 
+	// init.go need user to init
 	// init.go file for search migrations files
-	if mPath, err := m.migrationsPath(); err != nil {
-		return err
-	} else {
-		_, err := os.Stat(mPath + "init.go")
-		if os.IsNotExist(err) {
-			return m.write(INITContent, "init")
-		}
-		return nil
-	}
+	//if mPath, err := m.migrationsPath(); err != nil {
+	//	return err
+	//} else {
+	//	_, err := os.Stat(mPath + "init.go")
+	//	if os.IsNotExist(err) {
+	//		return m.write(INITContent, "init")
+	//	}
+	//	return nil
+	//}
+	return nil
 }
 
 func (m *Migrate) MakeMigrations(migrations interface{}, tables ...interface{}) error {
@@ -92,14 +95,22 @@ func (m *Migrate) MigrationsEnd(latest string) (end, fn string) {
 func (m *Migrate) genMigrationFileContent(exists *Table, target *Table) string {
 	var content string
 	if target == nil {
+		// table => None :delete table
+		if exists != nil {
+			// delete model
+			// 如果创建的表未migrate 那么这段语句不会执行。表现的结果是migrate之后表会创建，再次make migrations会remove。
+			content += fmt.Sprintf("&core.Operation{Action: core.DELETETable, TableName: \"%v\"},", exists.Name)
+		}
 		return content
 	}
+	// None => table: create
 	if exists == nil {
 		content = fmt.Sprintf("\t\t&core.Operation{Action: core.ADDTable, TableName: \"%v\"},\n", target.Name)
 		for _, field := range target.Fields {
 			content += fmt.Sprintf("\t\t&core.Operation{Action: core.ADDField, TableName: \"%v\", ColumnName: \"%v\", Type: \"%v\"},\n", target.Name, field.Name, field.Type)
 		}
 	}
+	// old table => new table: diff
 	if exists != nil {
 		if !reflect.DeepEqual(exists, target) {
 			// diff
@@ -108,14 +119,12 @@ func (m *Migrate) genMigrationFileContent(exists *Table, target *Table) string {
 	return content
 }
 
-func (m *Migrate) genTablesFromMigrationFiles(migrations interface{}) (map[string]*Table, string, error) {
-	fmt.Println("从已有的migration files(apply, unapply)生成 已生成结构 ing")
-	ret := make(map[string]*Table)
+func (m *Migrate) GetOperationsTree(migrations interface{}) *OperationsNode {
 	var operations []*Operations
 	valueOf := reflect.ValueOf(migrations)
 	typeOf := reflect.TypeOf(migrations)
 	if valueOf.NumMethod() < 1 {
-		return ret, "", nil
+		return nil
 	}
 
 	for i := 0; i < typeOf.NumMethod(); i++ {
@@ -125,22 +134,68 @@ func (m *Migrate) genTablesFromMigrationFiles(migrations interface{}) (map[strin
 	}
 	node := GenerateOperationsTree(&operations)
 	m.Valid(node)
-	heads := *m.HeadToString(node)
-	return node.GetTable(), heads[0], nil
+	return node
+}
 
+func (m *Migrate) genTablesFromMigrationFiles(migrations interface{}) (map[string]*Table, string, error) {
+	var head string
+	node := m.GetOperationsTree(migrations)
+	heads := m.HeadToString(node)
+	if len(heads) != 0 {
+		head = heads[0]
+	}
+	return node.GetTable(), head, nil
+}
+
+func (m *Migrate)indexesAndUniqueIndexes(scope *gorm.Scope) (map[string][]string, map[string][]string) {
+	var indexes = map[string][]string{}
+	var uniqueIndexes = map[string][]string{}
+
+	for _, field := range scope.GetStructFields() {
+		if name, ok := field.TagSettingsGet("INDEX"); ok {
+			names := strings.Split(name, ",")
+
+			for _, name := range names {
+				if name == "INDEX" || name == "" {
+					name = scope.Dialect().BuildKeyName("idx", scope.TableName(), field.DBName)
+				}
+				name, column := scope.Dialect().NormalizeIndexAndColumn(name, field.DBName)
+				indexes[column] = append(indexes[column], name)
+			}
+		}
+
+		if name, ok := field.TagSettingsGet("UNIQUE_INDEX"); ok {
+			names := strings.Split(name, ",")
+
+			for _, name := range names {
+				if name == "UNIQUE_INDEX" || name == "" {
+					name = scope.Dialect().BuildKeyName("uix", scope.TableName(), field.DBName)
+				}
+				name, column := scope.Dialect().NormalizeIndexAndColumn(name, field.DBName)
+				uniqueIndexes[column] = append(uniqueIndexes[column], name)
+			}
+		}
+	}
+	return indexes, uniqueIndexes
 }
 
 func (m *Migrate) genTableFromObject(values ...interface{}) (map[string]*Table, error) {
 	if len(values) == 0 {
-		return nil, fmt.Errorf("no table need to m\n")
+		return nil, fmt.Errorf("no table specified to make\n")
 	}
 	ret := make(map[string]*Table)
 	for _, value := range values {
 		scope := m.DB.NewScope(value)
+		indexes, uniqueIndexes := m.indexesAndUniqueIndexes(scope)
 		table := &Table{Name: scope.TableName()}
 		for _, structField := range scope.GetStructFields() {
-
-			field := Field{Name: structField.Name, Type: scope.Dialect().DataTypeOf(structField)}
+			field := Field{
+				Name: structField.DBName,
+				Type: scope.Dialect().DataTypeOf(structField),
+				IsPrimary: structField.IsPrimaryKey,
+				IndexNames: indexes[structField.DBName],
+				UniqueIndexNames: uniqueIndexes[structField.DBName],
+			}
 			table.Fields = append(table.Fields, &field)
 		}
 		ret[table.Name] = table
@@ -202,25 +257,25 @@ func (m *Migrate) Heads(root *OperationsNode, ret map[string]int) {
 	}
 }
 
-func (m *Migrate) HeadToString(root *OperationsNode) *[]string {
+func (m *Migrate) HeadToString(root *OperationsNode) []string {
 	var ret []string
 	heads := make(map[string]int)
 	m.Heads(root, heads)
 	for k := range heads {
 		ret = append(ret, k)
 	}
-	return &ret
+	return ret
 }
 
 func (m *Migrate) Valid(root *OperationsNode) {
-	heads := *m.HeadToString(root)
+	heads := m.HeadToString(root)
 	if len(heads) > 1 {
 		panic(fmt.Sprintf("multi heads %v", strings.Join(heads, " ")))
 	}
 }
 
 func (m *Migrate) Merge(root *OperationsNode) {
-	heads := *m.HeadToString(root)
+	heads := m.HeadToString(root)
 	if len(heads) > 1 {
 
 		//panic(fmt.Sprintf("multi heads %v", strings.Join(*Map2StringList(heads), " ")))

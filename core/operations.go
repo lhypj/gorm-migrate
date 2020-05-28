@@ -13,15 +13,19 @@ const (
 	ADDTable
 	DELETETable
 	ADDIndex
+	ADDUniqueIndex
 	DELETEIndex
 )
 
 type Operation struct {
-	Action     ActionType
-	TableName  string
-	ColumnName string
-	Type       string
-	TypeNew    string
+	Action           ActionType
+	TableName        string
+	ColumnName       string
+	Type             string
+	TypeNew          string
+	IsPrimary        bool
+	IndexNames       []string
+	UniqueIndexNames []string
 }
 
 type Operations struct {
@@ -35,12 +39,16 @@ type OperationsNode struct {
 	Children []*OperationsNode
 }
 
-func searchTree(root *OperationsNode, tableFieldType map[string]map[string]string) {
-	if root == nil {
+func (node *OperationsNode) IsRoot() bool {
+	return node.Ops == nil && len(node.Children) != 0
+}
+
+func searchTree(node *OperationsNode, tableFieldType map[string]map[string]string) {
+	if node == nil {
 		return
 	}
-	if root.Ops != nil {
-		for _, op := range root.Ops.Operations {
+	if node.Ops != nil {
+		for _, op := range node.Ops.Operations {
 			switch op.Action {
 			case ADDTable:
 				column := make(map[string]string)
@@ -68,7 +76,7 @@ func searchTree(root *OperationsNode, tableFieldType map[string]map[string]strin
 			}
 		}
 	}
-	for _, child := range root.Children {
+	for _, child := range node.Children {
 		searchTree(child, tableFieldType)
 	}
 }
