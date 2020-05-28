@@ -57,7 +57,7 @@ func (m *Migrate) UnApplied(migrations interface{}) []*Operations {
 	searchUnApplied(root, applied, &unApplied, &allOperations)
 
 	if !checkUnApplied(unApplied, allOperations) {
-		panic("UnApplied migrations is continuous, use Fake or manual handel")
+		panic("UnApplied migrations is not continuous, use Fake or manual handel")
 	}
 	return unApplied
 }
@@ -95,7 +95,7 @@ func (m *Migrate) createTableAndReturnHandledTable(unApplied []*Operations) map[
 			if op.IsPrimary {
 				primaryKeys = append(primaryKeys, scope.Quote(op.ColumnName))
 			}
-			if op.ColumnName != "" && op.Type != ""{
+			if op.ColumnName != "" && op.Type != "" {
 				tags = append(tags, scope.Quote(op.ColumnName)+" "+op.Type)
 			}
 		}
@@ -113,45 +113,46 @@ func (m *Migrate) Migrate(migrations interface{}) {
 	unApplied := m.UnApplied(migrations)
 	if len(unApplied) == 0 {
 		fmt.Println("No UnApplied migrations need to migrate")
-	} else {
-		var migrationInfo []string
-		db := m.DB.Begin()
-		tableMigrated := m.createTableAndReturnHandledTable(unApplied)
-		for _, operations := range m.UnApplied(migrations) {
-			migrationInfo = append(migrationInfo, operations.Revision)
-			for _, op := range operations.Operations {
-				_db := db.Table(op.TableName)
-				switch op.Action {
-				case ADDField:
-					if tableMigrated[op.TableName] < 1 {
-						scope := _db.NewScope(op.TableName)
-						scope.Raw(fmt.Sprintf("ALTER TABLE %v ADD COLUMN %v %v",
-							scope.QuotedTableName(), scope.Quote(op.ColumnName), op.Type)).Exec()
-					}
-				case DELETEField:
-					_db.DropColumn(op.ColumnName)
-				case ALTERField:
-					_db.ModifyColumn(op.ColumnName, op.TypeNew)
-				case ADDIndex:
-					fmt.Println("todo: ADDIndex")
-				case ADDUniqueIndex:
-					fmt.Println("todo: ADDUniqueIndex")
-				case DELETETable:
-					_db.DropTableIfExists(op.TableName)
-				case DELETEIndex:
-					fmt.Println("todo: DELETEIndex")
-				}
+		return
+	}
+	var migrationInfo []string
+	db := m.DB.Begin()
+	migrated := m.createTableAndReturnHandledTable(unApplied)
+	for _, operations := range m.UnApplied(migrations) {
+		migrationInfo = append(migrationInfo, operations.Revision)
+		for _, op := range operations.Operations {
+			if migrated[op.TableName] > 0 {
+				continue
+			}
+			_db := db.Table(op.TableName)
+			switch op.Action {
+			case ADDField:
+				scope := _db.NewScope(op.TableName)
+				scope.Raw(fmt.Sprintf("ALTER TABLE %v ADD COLUMN %v %v",
+					scope.QuotedTableName(), scope.Quote(op.ColumnName), op.Type)).Exec()
+			case DELETEField:
+				_db.DropColumn(op.ColumnName)
+			case ALTERField:
+				_db.ModifyColumn(op.ColumnName, op.TypeNew)
+			case ADDIndex:
+				fmt.Println("todo: ADDIndex")
+			case ADDUniqueIndex:
+				fmt.Println("todo: ADDUniqueIndex")
+			case DELETETable:
+				_db.DropTableIfExists(op.TableName)
+			case DELETEIndex:
+				fmt.Println("todo: DELETEIndex")
 			}
 		}
+	}
 
-		for _, info := range migrationInfo {
-			db.Create(&OrmMigrations{Name: info})
-		}
-		db.Commit()
+	for _, info := range migrationInfo {
+		db.Create(&OrmMigrations{Name: info})
+	}
+	db.Commit()
 
-		for _, info := range migrationInfo {
-			fmt.Printf("Migrations:%v migrate successful!\n", info)
-		}
+	for _, info := range migrationInfo {
+		fmt.Printf("Migrations:%v migrate successful!\n", info)
 	}
 }
 
