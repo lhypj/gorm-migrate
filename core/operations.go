@@ -13,8 +13,9 @@ const (
 	ADDTable
 	DELETETable
 	ADDIndex
-	ADDUniqueIndex
 	DELETEIndex
+	ADDUniqueIndex
+	DELETEUniqueIndex
 )
 
 type Operation struct {
@@ -24,8 +25,10 @@ type Operation struct {
 	Type             string
 	TypeNew          string
 	IsPrimary        bool
-	IndexNames       []string
-	UniqueIndexNames []string
+	IndexName        string
+	IndexFieldNames  []string
+	UniqueIndexName  string
+	UniqueFieldNames []string
 }
 
 type Operations struct {
@@ -43,16 +46,25 @@ func (node *OperationsNode) IsRoot() bool {
 	return node.Ops == nil && len(node.Children) != 0
 }
 
-func searchTree(node *OperationsNode, tableFieldType map[string]map[string]string) {
+func searchTree(node *OperationsNode,
+	tableFieldType map[string]map[string]string,
+	tableIndexes map[string]map[string][]string,
+	tableUniqueIndexes map[string]map[string][]string) {
 	if node == nil {
 		return
 	}
 	if node.Ops != nil {
 		for _, op := range node.Ops.Operations {
+			if tableFieldType[op.TableName] == nil {
+				tableFieldType[op.TableName] = make(map[string]string)
+			}
+			if tableIndexes[op.TableName] == nil {
+				tableIndexes[op.TableName] = make(map[string][]string)
+			}
+			if tableUniqueIndexes[op.TableName] == nil {
+				tableUniqueIndexes[op.TableName] = make(map[string][]string)
+			}
 			switch op.Action {
-			case ADDTable:
-				column := make(map[string]string)
-				tableFieldType[op.TableName] = column
 			case ADDField:
 				tableFieldType[op.TableName][op.ColumnName] = op.Type
 			case DELETEField:
@@ -70,14 +82,22 @@ func searchTree(node *OperationsNode, tableFieldType map[string]map[string]strin
 				}
 				delete(tableFieldType, op.TableName)
 			case ADDIndex:
-				fmt.Println("todo add indexes")
+				tableIndexes[op.TableName][op.IndexName] = op.IndexFieldNames
 			case DELETEIndex:
-				fmt.Println("todo delete indexes")
+				if tableIndexes[op.TableName][op.IndexName] != nil {
+					delete(tableIndexes[op.TableName], op.IndexName)
+				}
+			case ADDUniqueIndex:
+				tableUniqueIndexes[op.TableName][op.UniqueIndexName] = op.UniqueFieldNames
+			case DELETEUniqueIndex:
+				if tableUniqueIndexes[op.TableName][op.UniqueIndexName] != nil {
+					delete(tableUniqueIndexes[op.TableName], op.UniqueIndexName)
+				}
 			}
 		}
 	}
 	for _, child := range node.Children {
-		searchTree(child, tableFieldType)
+		searchTree(child, tableFieldType, tableIndexes, tableUniqueIndexes)
 	}
 }
 
@@ -85,14 +105,26 @@ func (root *OperationsNode) GetTable() map[string]*Table {
 	tables := make(map[string]*Table)
 
 	tableFieldType := make(map[string]map[string]string)
-	searchTree(root, tableFieldType)
+	tableIndexes := make(map[string]map[string][]string)
+	tableUniqueIndexes := make(map[string]map[string][]string)
+	searchTree(root, tableFieldType, tableIndexes, tableUniqueIndexes)
 
 	for tableName := range tableFieldType {
-		t := tableFieldType[tableName]
 		table := Table{Name: tableName}
+
+		t := tableFieldType[tableName]
 		for fs := range t {
 			table.Fields = append(table.Fields, &Field{Name: fs, Type: t[fs]})
 		}
+
+		for idxName, columns := range tableIndexes[tableName] {
+			table.Indexes = append(table.Indexes, &Index{Name: idxName, FieldName: columns})
+		}
+
+		for idxName, columns := range tableUniqueIndexes[tableName] {
+			table.UniqueIndexes = append(table.UniqueIndexes, &Index{Name: idxName, FieldName: columns})
+		}
+
 		tables[tableName] = &table
 	}
 	return tables

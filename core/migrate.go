@@ -104,7 +104,10 @@ func (m *Migrate) createTableAndReturnHandledTable(unApplied []*Operations) map[
 			primaryKeyStr = fmt.Sprintf(", PRIMARY KEY (%v)", strings.Join(primaryKeys, ","))
 		}
 		// scope.getTableOptions()?
-		scope.Raw(fmt.Sprintf("CREATE TABLE %v (%v %v)", scope.QuotedTableName(), strings.Join(tags, ","), primaryKeyStr)).Exec()
+		s := fmt.Sprintf("CREATE TABLE %v (%v %v)", scope.QuotedTableName(), strings.Join(tags, ","), primaryKeyStr)
+		if scope.Raw(s).Exec().HasError() {
+			panic(fmt.Sprintf("%v Failed", s))
+		}
 	}
 	return tableAdded
 }
@@ -120,6 +123,7 @@ func (m *Migrate) Migrate(migrations interface{}) {
 	migrated := m.createTableAndReturnHandledTable(unApplied)
 	for _, operations := range m.UnApplied(migrations) {
 		migrationInfo = append(migrationInfo, operations.Revision)
+		// todo panic err sql to stop 
 		for _, op := range operations.Operations {
 			if migrated[op.TableName] > 0 {
 				continue

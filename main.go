@@ -16,10 +16,11 @@ func main() {
 		fmt.Println(err)
 	}
 	defer db.Close()
-	db.AutoMigrate()
+	//db.AutoMigrate()
 	//todo use conf
 	migrate := core.Migrate{DB: db, ModelsRelativePath: "/models", PackagePath: "migrate/core"}
 	migrate.MigrationsInit()
 	migrate.MakeMigrations(&migrations.Migrations{}, &models.CreateTableTest{})
-	//migrate.Migrate(&migrations.Migrations{})
+
+	migrate.Migrate(&migrations.Migrations{})
 }

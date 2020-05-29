@@ -14,14 +14,20 @@ type Migrate struct {
 }
 
 type Field struct {
-	Name             string
-	Type             string
-	IsPrimary        bool
-	IndexNames       []string
-	UniqueIndexNames []string
+	Name      string
+	Type      string
+	IsPrimary bool
+}
+
+type Index struct {
+	Name      string
+	FieldName []string
 }
 
 type Table struct {
-	Name   string
-	Fields []*Field
+	Name          string
+	Fields        []*Field
+	Indexes       []*Index
+	UniqueIndexes []*Index
 }
+
