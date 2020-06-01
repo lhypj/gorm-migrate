@@ -5,6 +5,7 @@ import (
 )
 
 type ActionType uint8
+type OperationSlice []*Operations
 
 const (
 	ADDField ActionType = iota
@@ -93,10 +94,10 @@ func searchTree(node *OperationsNode,
 					delete(tableIndexes[op.TableName], op.IndexName)
 				}
 			case ADDUniqueIndex:
-				tableUniqueIndexes[op.TableName][op.UniqueIndexName] = op.UniqueFieldNames
+				tableUniqueIndexes[op.TableName][op.IndexName] = op.IndexFieldNames
 			case DELETEUniqueIndex:
-				if tableUniqueIndexes[op.TableName][op.UniqueIndexName] != nil {
-					delete(tableUniqueIndexes[op.TableName], op.UniqueIndexName)
+				if tableUniqueIndexes[op.TableName][op.IndexName] != nil {
+					delete(tableUniqueIndexes[op.TableName], op.IndexName)
 				}
 			}
 		}
@@ -107,6 +108,7 @@ func searchTree(node *OperationsNode,
 }
 
 func (root *OperationsNode) GetTable() map[string]*Table {
+	// todo 修改主键，现阶段Table未添加主键的更改信息
 	tables := make(map[string]*Table)
 
 	tableFieldType := make(map[string]map[string]string)
@@ -180,3 +182,7 @@ func GenerateOperationsTree(operations *[]*Operations) *OperationsNode {
 	//ShowTree(node)
 	return node
 }
+
+func (ops OperationSlice) Len() int {return len(ops)}
+func (ops OperationSlice) Swap(i, j int) {ops[i], ops[j] = ops[j], ops[i]}
+func (ops OperationSlice) Less(i, j int) bool {return ops[i].Revision < ops[j].Revision}

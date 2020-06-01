@@ -2,7 +2,9 @@ package core
 
 import (
 	"fmt"
+	"github.com/jinzhu/gorm"
 	"reflect"
+	"sort"
 	"strings"
 )
 
@@ -17,8 +19,11 @@ func (m *Migrate) Applied() map[string]int {
 	} else {
 		var name string
 		for rows.Next() {
-			rows.Scan(&name)
-			ret[name] = 1
+			if err := rows.Scan(&name); err != nil {
+				panic(err)
+			} else {
+				ret[name] = 1
+			}
 		}
 		return ret
 	}
@@ -52,18 +57,23 @@ func checkUnApplied(unApplied []*Operations, allOperations []*Operations) bool {
 func (m *Migrate) UnApplied() []*Operations {
 	var unApplied []*Operations
 	var allOperations []*Operations
-	root := m.GetOperationsTree(m.Migrations)
+	root := m.GetOperationsTree(true)
 	applied := m.Applied()
 	searchUnApplied(root, applied, &unApplied, &allOperations)
 
 	if !checkUnApplied(unApplied, allOperations) {
 		panic("UnApplied migrations is not continuous, use Fake or manual handel")
 	}
+	sort.Sort(OperationSlice(unApplied))
 	return unApplied
 }
 
-func (*Migrate) Fake(target []string) {
-
+func (*Migrate) getTableOptions(scope *gorm.Scope) string {
+	tableOptions, ok := scope.Get("gorm:table_options")
+	if !ok {
+		return ""
+	}
+	return " " + tableOptions.(string)
 }
 
 func (m *Migrate) createTableAndReturnHandledTable(unApplied []*Operations) map[string]int {
@@ -103,8 +113,7 @@ func (m *Migrate) createTableAndReturnHandledTable(unApplied []*Operations) map[
 		if len(primaryKeys) > 0 && !primaryKeyInColumnType {
 			primaryKeyStr = fmt.Sprintf(", PRIMARY KEY (%v)", strings.Join(primaryKeys, ","))
 		}
-		// todo scope.getTableOptions()?
-		s := fmt.Sprintf("CREATE TABLE %v (%v %v)", scope.QuotedTableName(), strings.Join(tags, ","), primaryKeyStr)
+		s := fmt.Sprintf("CREATE TABLE %v (%v %v)%s", scope.QuotedTableName(), strings.Join(tags, ","), primaryKeyStr, m.getTableOptions(scope))
 		if scope.Raw(s).Exec().HasError() {
 			panic(fmt.Sprintf("%v Failed", s))
 		}
@@ -119,10 +128,27 @@ func (m *Migrate) Migrate() {
 		return
 	}
 	var migrationInfo []string
+	repeated := make(map[string]int)
+
 	db := m.DB.Begin()
+	defer func() {
+		if err := recover(); err != nil {
+			db.Rollback()
+			panic(err)
+		}
+
+		db.Commit()
+		for _, info := range migrationInfo {
+			fmt.Printf("Migrations:%v migrate successful!\n", info)
+		}
+	}()
+
 	migrated := m.createTableAndReturnHandledTable(unApplied)
 	for _, operations := range unApplied {
-		migrationInfo = append(migrationInfo, operations.Revision)
+		repeated[operations.Revision] += 1
+		if repeated[operations.Revision] == 1 {
+			migrationInfo = append(migrationInfo, operations.Revision)
+		}
 		for _, op := range operations.Operations {
 			if migrated[op.TableName] > 0 {
 				continue
@@ -133,41 +159,44 @@ func (m *Migrate) Migrate() {
 				scope := _db.NewScope(op.TableName)
 				if err := scope.Raw(fmt.Sprintf("ALTER TABLE %v ADD COLUMN %v %v",
 					scope.QuotedTableName(), scope.Quote(op.ColumnName), op.Type)).Exec().DB().Error; err != nil {
-					db.Rollback()
 					panic(fmt.Sprintf("Table: %v AddField: %v failed: %v", op.TableName, op.ColumnName, err))
 				}
 			case DELETEField:
 				if err := _db.DropColumn(op.ColumnName).Error; err != nil {
-					db.Rollback()
 					panic(fmt.Sprintf("Table: %v DeleteField: %v failed: %v", op.TableName, op.ColumnName, err))
 				}
 			case ALTERField:
 				if err := _db.ModifyColumn(op.ColumnName, op.TypeNew).Error; err != nil {
-					db.Rollback()
 					panic(fmt.Sprintf("Table: %v AlterField: %v failed: %v", op.TableName, op.ColumnName, err))
 				}
 			case ADDIndex:
-				fmt.Println("todo: ADDIndex")
+				if err := _db.AddIndex(op.IndexName, op.IndexFieldNames...).Error; err != nil {
+					panic(fmt.Sprintf("Table: %v AddIndex: %v failed: %v", op.TableName, op.IndexName, err))
+				}
 			case ADDUniqueIndex:
-				fmt.Println("todo: ADDUniqueIndex")
+				if err := _db.AddUniqueIndex(op.IndexName, op.IndexFieldNames...).Error; err != nil {
+					panic(fmt.Sprintf("Table: %v AddUniqueIndex: %v failed: %v", op.TableName, op.IndexName, err))
+				}
 			case DELETETable:
 				if err := _db.DropTableIfExists(op.TableName).Error; err != nil {
-					db.Rollback()
 					panic(fmt.Sprintf("Deletetable: %v failed: %v", op.TableName, err))
 				}
 			case DELETEIndex:
-				fmt.Println("todo: DELETEIndex")
+				if err := _db.RemoveIndex(op.IndexName).Error; err != nil {
+					panic(fmt.Sprintf("Table: %v RemoveIndex: %v failed: %v", op.TableName, op.IndexName, err))
+				}
+			case DELETEUniqueIndex:
+				if err := _db.RemoveIndex(op.IndexName).Error; err != nil {
+					panic(fmt.Sprintf("Table: %v RemoveUniqueIndex: %v failed: %v", op.TableName, op.IndexName, err))
+				}
 			}
 		}
 	}
 
 	for _, info := range migrationInfo {
-		db.Create(&OrmMigrations{Name: info})
-	}
-	db.Commit()
-
-	for _, info := range migrationInfo {
-		fmt.Printf("Migrations:%v migrate successful!\n", info)
+		if err := db.Create(&OrmMigrations{Name: info}).Error; err != nil {
+			panic(err)
+		}
 	}
 }
 

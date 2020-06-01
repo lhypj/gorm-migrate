@@ -25,47 +25,33 @@ func (*Migrate) rootPath() (string, error) {
 	return os.Getwd()
 }
 
-func (m *Migrate) migrationsPath() (string, error) {
+func (m *Migrate) migrationsPath() string {
 	if path, err := m.rootPath(); err != nil {
-		return "", err
+		panic(err)
 	} else {
-		return path + m.ModelsRelativePath + MIGRATIONPath, nil
+		return path + m.ModelsRelativePath + MIGRATIONPath
 	}
 
 }
 
-func (m *Migrate) MigrationsInit() error {
+func (m *Migrate) MigrationsInit() {
 	// migrate models
 	m.DB.AutoMigrate(&OrmMigrations{})
 
-	// init.go need user to init
-	// init.go file for search migrations files
-	//if mPath, err := m.migrationsPath(); err != nil {
-	//	return err
-	//} else {
-	//	_, err := os.Stat(mPath + "init.go")
-	//	if os.IsNotExist(err) {
-	//		return m.write(INITContent, "init")
-	//	}
-	//	return nil
-	//}
-	return nil
+	mPath := m.migrationsPath()
+	_, err := os.Stat(mPath + "init.go")
+	if os.IsNotExist(err) {
+		m.write(INITContent, "init")
+	}
 }
 
-func (m *Migrate) MakeMigrations(tables ...interface{}) error {
-	tableFromFile, head, err := m.genTablesFromMigrationFiles(m.Migrations)
-	if err != nil {
-		return err
-	}
-	tableFromObj, err := m.genTableFromObject(tables...)
-	if err != nil {
-		return err
-	}
-
+func (m *Migrate) MakeMigrations(tables ...interface{}) {
 	var content string
+	tableFromFile, head := m.genTablesFromMigrationFiles()
+	tableFromObj := m.genTableFromObject(tables...)
 	fn := m.genMigrationFileName(head)
 	pre := m.MigrationsPre(fn)
-	end := m.MigrationsEnd(fn, head)
+	end := m.MigrationsEnd(fn, []string{head})
 	for _, table := range tables {
 		name := m.DB.NewScope(table).TableName()
 		content += m.genMigrationFileContent(tableFromFile[name], tableFromObj[name])
@@ -73,21 +59,18 @@ func (m *Migrate) MakeMigrations(tables ...interface{}) error {
 	if content == "" {
 		fmt.Println("No migrations need to make")
 	} else {
-		if err := m.write(pre+content+end, fn); err != nil {
-			return err
-		}
+		m.write(pre+content+end, fn)
 	}
-	return nil
 }
 
 func (m *Migrate) MigrationsPre(fn string) string {
-	return fmt.Sprintf("package migrations\n\nimport %v\n\nfunc (*Migrations)Migration_%v() *core.Operations {\n\tvar ops []*core.Operation\n\tops = append(ops,\n",
+	return fmt.Sprintf("package migrations\n\nimport %v\n\nfunc (*Migrations) Migration_%v() *core.Operations {\n\tvar ops []*core.Operation\n\tops = append(ops,\n",
 		m.quoteStrToMigrations(m.PackagePath), fn)
 }
 
-func (m *Migrate) MigrationsEnd(fn, latest string) string {
-	return fmt.Sprintf("\t)\n\treturn &core.Operations{Revision: %v, DownRevision: []string{%v}, Operations: ops}\n}",
-		m.quoteStrToMigrations(fn), m.quoteStrToMigrations(latest))
+func (m *Migrate) MigrationsEnd(fn string, latest []string) string {
+	return fmt.Sprintf("\t)\n\treturn &core.Operations{Revision: %v, DownRevision: %v, Operations: ops}\n}",
+		m.quoteStrToMigrations(fn), m.quoteStrListToMigrations(latest))
 }
 
 func (m *Migrate) diffFields(exists *Table, target *Table) string {
@@ -108,7 +91,7 @@ func (m *Migrate) diffFields(exists *Table, target *Table) string {
 		o := oldField[fn]
 		n := newField[fn]
 		if o == nil && n != nil {
-			content += m.migrationAddFieldContent(tableName, n.Name, n.Type)
+			content += m.migrationAddFieldContent(tableName, n.Name, n.Type, n.IsPrimary)
 		}
 		if o != nil && n == nil {
 			content += m.migrationDeleteFieldContent(tableName, o.Name)
@@ -129,10 +112,15 @@ func (m *Migrate) diffIndexes(exists *Table, target *Table, unique bool) string 
 
 	eIndexes := exists.Indexes
 	tIndexes := target.Indexes
+	addAction := ADDIndexStr
+	deleteAction := DELETEIndexStr
 	if unique {
 		eIndexes = exists.UniqueIndexes
 		tIndexes = target.UniqueIndexes
+		addAction = ADDUniqueIndexStr
+		deleteAction = DELETEUniqueIndexStr
 	}
+
 	for _, index := range eIndexes {
 		indexes[index.Name] = 1
 		oldIndex[index.Name] = index
@@ -144,19 +132,13 @@ func (m *Migrate) diffIndexes(exists *Table, target *Table, unique bool) string 
 	for idxName := range indexes {
 		o := oldIndex[idxName]
 		n := newIndex[idxName]
-		addAction := ADDIndexStr
-		deleteAction := DELETEIndexStr
-		if unique {
-			addAction = ADDUniqueIndexStr
-			deleteAction = DELETEUniqueIndexStr
-		}
 		if o == nil && n != nil {
 			content += m.migrationIndexContent(tableName, addAction, n.Name, n.FieldName)
 		}
 		if o != nil && n == nil {
 			content += m.migrationIndexContent(tableName, deleteAction, o.Name, o.FieldName)
 		}
-		if o != nil && n != nil && !reflect.DeepEqual(o.FieldName, n.FieldName){
+		if o != nil && n != nil && !reflect.DeepEqual(o.FieldName, n.FieldName) {
 			content += m.migrationIndexContent(tableName, deleteAction, o.Name, o.FieldName)
 			content += m.migrationIndexContent(tableName, addAction, n.Name, n.FieldName)
 		}
@@ -172,9 +154,13 @@ func (m *Migrate) diff(exists *Table, target *Table) string {
 	return content
 }
 
-func (m *Migrate) migrationAddFieldContent(tableName, fieldName, fileType string) string {
-	return fmt.Sprintf("\t\t&core.Operation{Action: core.ADDField, TableName: %v, ColumnName: %v, Type: %v},\n",
-		m.quoteStrToMigrations(tableName), m.quoteStrToMigrations(fieldName), m.quoteStrToMigrations(fileType))
+func (m *Migrate) migrationAddFieldContent(tableName, fieldName, fileType string, isPrimary bool) string {
+	primaryStr := ""
+	if isPrimary {
+		primaryStr = ", IsPrimary: true"
+	}
+	return fmt.Sprintf("\t\t&core.Operation{Action: core.ADDField, TableName: %v, ColumnName: %v, Type: %v%v},\n",
+		m.quoteStrToMigrations(tableName), m.quoteStrToMigrations(fieldName), m.quoteStrToMigrations(fileType), primaryStr)
 }
 
 func (m *Migrate) migrationDeleteFieldContent(tableName, fieldName string) string {
@@ -188,8 +174,8 @@ func (m *Migrate) migrationAlterFieldContent(tableName, fieldName, old, new stri
 }
 
 func (m *Migrate) migrationIndexContent(tableName, action, indexName string, indexFields []string) string {
-	return fmt.Sprintf("\t\t&core.Operation{Action: %v, TableName: %v, IndexName: %v, IndexFieldNames: %v},\n",
-				m.quoteStrToMigrations(tableName), action, m.quoteStrToMigrations(indexName), m.quoteStrListToMigrations(indexFields))
+	return fmt.Sprintf("\t\t&core.Operation{TableName: %v, Action: %v, IndexName: %v, IndexFieldNames: %v},\n",
+		m.quoteStrToMigrations(tableName), action, m.quoteStrToMigrations(indexName), m.quoteStrListToMigrations(indexFields))
 }
 
 func (m *Migrate) quoteStrToMigrations(str string) string {
@@ -208,7 +194,6 @@ func (m *Migrate) genMigrationFileContent(exists *Table, target *Table) string {
 	var content string
 	if target == nil {
 		if exists != nil {
-			// 如果创建的表未migrate 那么这段语句不会执行。表现的结果是migrate之后表会创建，再次make migrations会remove。
 			content += fmt.Sprintf("&core.Operation{Action: core.DELETETable, TableName: %v},",
 				m.quoteStrToMigrations(exists.Name))
 		}
@@ -217,20 +202,20 @@ func (m *Migrate) genMigrationFileContent(exists *Table, target *Table) string {
 	if exists == nil {
 		content = fmt.Sprintf("\t\t&core.Operation{Action: core.ADDTable, TableName: %v},\n", m.quoteStrToMigrations(target.Name))
 		for _, field := range target.Fields {
-			content += m.migrationAddFieldContent(target.Name, field.Name, field.Type)
+			content += m.migrationAddFieldContent(target.Name, field.Name, field.Type, field.IsPrimary)
 		}
 		for _, index := range target.Indexes {
 			indexName := index.Name
 			content += fmt.Sprintf(
 				"\t\t&core.Operation{Action: core.ADDIndex, TableName: %v, IndexName: %v, IndexFieldNames: %v},\n",
-				 m.quoteStrToMigrations(target.Name),  m.quoteStrToMigrations(indexName), m.quoteStrListToMigrations(index.FieldName))
+				m.quoteStrToMigrations(target.Name), m.quoteStrToMigrations(indexName), m.quoteStrListToMigrations(index.FieldName))
 		}
 
 		for _, index := range target.UniqueIndexes {
 			indexName := index.Name
 			content += fmt.Sprintf(
 				"\t\t&core.Operation{Action: core.ADDUniqueIndex, TableName: %v, UniqueIndexName: %v, UniqueFieldNames: %v},\n",
-				m.quoteStrToMigrations(target.Name),  m.quoteStrToMigrations(indexName), m.quoteStrListToMigrations(index.FieldName))
+				m.quoteStrToMigrations(target.Name), m.quoteStrToMigrations(indexName), m.quoteStrListToMigrations(index.FieldName))
 		}
 	}
 	if exists != nil {
@@ -241,10 +226,10 @@ func (m *Migrate) genMigrationFileContent(exists *Table, target *Table) string {
 	return content
 }
 
-func (m *Migrate) GetOperationsTree(migrations interface{}) *OperationsNode {
+func (m *Migrate) GetOperationsTree(withValid bool) *OperationsNode {
 	var operations []*Operations
-	valueOf := reflect.ValueOf(migrations)
-	typeOf := reflect.TypeOf(migrations)
+	valueOf := reflect.ValueOf(m.Migrations)
+	typeOf := reflect.TypeOf(m.Migrations)
 	if valueOf.NumMethod() < 1 {
 		return nil
 	}
@@ -255,18 +240,20 @@ func (m *Migrate) GetOperationsTree(migrations interface{}) *OperationsNode {
 		operations = append(operations, ops)
 	}
 	node := GenerateOperationsTree(&operations)
-	m.Valid(node)
+	if withValid{
+		m.Valid(node)
+	}
 	return node
 }
 
-func (m *Migrate) genTablesFromMigrationFiles(migrations interface{}) (map[string]*Table, string, error) {
+func (m *Migrate) genTablesFromMigrationFiles() (map[string]*Table, string) {
 	var head string
-	node := m.GetOperationsTree(migrations)
+	node := m.GetOperationsTree(true)
 	heads := m.HeadToString(node)
 	if len(heads) != 0 {
 		head = heads[0]
 	}
-	return node.GetTable(), head, nil
+	return node.GetTable(), head
 }
 
 func (m *Migrate) indexesAndUniqueIndexes(scope *gorm.Scope) (map[string][]string, map[string][]string) {
@@ -301,9 +288,9 @@ func (m *Migrate) indexesAndUniqueIndexes(scope *gorm.Scope) (map[string][]strin
 	return indexes, uniqueIndexes
 }
 
-func (m *Migrate) genTableFromObject(values ...interface{}) (map[string]*Table, error) {
+func (m *Migrate) genTableFromObject(values ...interface{}) map[string]*Table {
 	if len(values) == 0 {
-		return nil, fmt.Errorf("no table specified to make\n")
+		panic(fmt.Sprintf("no table specified to make"))
 	}
 	ret := make(map[string]*Table)
 	for _, value := range values {
@@ -312,9 +299,9 @@ func (m *Migrate) genTableFromObject(values ...interface{}) (map[string]*Table, 
 		table := &Table{Name: scope.TableName()}
 		for _, structField := range scope.GetStructFields() {
 			field := Field{
-				Name:             structField.DBName,
-				Type:             scope.Dialect().DataTypeOf(structField),
-				IsPrimary:        structField.IsPrimaryKey,
+				Name:      structField.DBName,
+				Type:      scope.Dialect().DataTypeOf(structField),
+				IsPrimary: structField.IsPrimaryKey,
 			}
 			table.Fields = append(table.Fields, &field)
 		}
@@ -326,12 +313,7 @@ func (m *Migrate) genTableFromObject(values ...interface{}) (map[string]*Table, 
 		}
 		ret[table.Name] = table
 	}
-	return ret, nil
-}
-
-func (m *Migrate) genMigrationFiles() error {
-	fmt.Println("writing")
-	return nil
+	return ret
 }
 
 func (*Migrate) genMigrationFileName(latest string) string {
@@ -351,24 +333,20 @@ func (*Migrate) genMigrationFileName(latest string) string {
 	return ret
 }
 
-func (m *Migrate) write(migrationString, fileName string) error {
-	migrationsPath, err := m.migrationsPath()
-	if err != nil {
-		return err
-	}
+func (m *Migrate) write(migrationString, fileName string) {
+	migrationsPath := m.migrationsPath()
 	filePath := migrationsPath + fileName + ".go"
-	fmt.Println(filePath)
 	f, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE, 0666)
 	defer f.Close()
 
 	if err != nil {
-		return err
+		panic(err)
 	}
 	_, err = f.WriteString(migrationString)
 	if err != nil {
-		return err
+		panic(err)
 	}
-	return nil
+	fmt.Printf("%v generated success.", filePath)
 }
 
 func (m *Migrate) Heads(root *OperationsNode, ret map[string]int) {
@@ -397,13 +375,5 @@ func (m *Migrate) Valid(root *OperationsNode) {
 	heads := m.HeadToString(root)
 	if len(heads) > 1 {
 		panic(fmt.Sprintf("multi heads %v", strings.Join(heads, " ")))
-	}
-}
-
-func (m *Migrate) Merge(root *OperationsNode) {
-	heads := m.HeadToString(root)
-	if len(heads) > 1 {
-
-		//panic(fmt.Sprintf("multi heads %v", strings.Join(*Map2StringList(heads), " ")))
 	}
 }
