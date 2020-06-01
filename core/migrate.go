@@ -49,10 +49,10 @@ func checkUnApplied(unApplied []*Operations, allOperations []*Operations) bool {
 	return reflect.DeepEqual(unApplied, allOperations[len(allOperations)-len(unApplied):])
 }
 
-func (m *Migrate) UnApplied(migrations interface{}) []*Operations {
+func (m *Migrate) UnApplied() []*Operations {
 	var unApplied []*Operations
 	var allOperations []*Operations
-	root := m.GetOperationsTree(migrations)
+	root := m.GetOperationsTree(m.Migrations)
 	applied := m.Applied()
 	searchUnApplied(root, applied, &unApplied, &allOperations)
 
@@ -103,7 +103,7 @@ func (m *Migrate) createTableAndReturnHandledTable(unApplied []*Operations) map[
 		if len(primaryKeys) > 0 && !primaryKeyInColumnType {
 			primaryKeyStr = fmt.Sprintf(", PRIMARY KEY (%v)", strings.Join(primaryKeys, ","))
 		}
-		// scope.getTableOptions()?
+		// todo scope.getTableOptions()?
 		s := fmt.Sprintf("CREATE TABLE %v (%v %v)", scope.QuotedTableName(), strings.Join(tags, ","), primaryKeyStr)
 		if scope.Raw(s).Exec().HasError() {
 			panic(fmt.Sprintf("%v Failed", s))
@@ -112,8 +112,8 @@ func (m *Migrate) createTableAndReturnHandledTable(unApplied []*Operations) map[
 	return tableAdded
 }
 
-func (m *Migrate) Migrate(migrations interface{}) {
-	unApplied := m.UnApplied(migrations)
+func (m *Migrate) Migrate() {
+	unApplied := m.UnApplied()
 	if len(unApplied) == 0 {
 		fmt.Println("No UnApplied migrations need to migrate")
 		return
@@ -121,9 +121,8 @@ func (m *Migrate) Migrate(migrations interface{}) {
 	var migrationInfo []string
 	db := m.DB.Begin()
 	migrated := m.createTableAndReturnHandledTable(unApplied)
-	for _, operations := range m.UnApplied(migrations) {
+	for _, operations := range unApplied {
 		migrationInfo = append(migrationInfo, operations.Revision)
-		// todo panic err sql to stop 
 		for _, op := range operations.Operations {
 			if migrated[op.TableName] > 0 {
 				continue
@@ -132,18 +131,30 @@ func (m *Migrate) Migrate(migrations interface{}) {
 			switch op.Action {
 			case ADDField:
 				scope := _db.NewScope(op.TableName)
-				scope.Raw(fmt.Sprintf("ALTER TABLE %v ADD COLUMN %v %v",
-					scope.QuotedTableName(), scope.Quote(op.ColumnName), op.Type)).Exec()
+				if err := scope.Raw(fmt.Sprintf("ALTER TABLE %v ADD COLUMN %v %v",
+					scope.QuotedTableName(), scope.Quote(op.ColumnName), op.Type)).Exec().DB().Error; err != nil {
+					db.Rollback()
+					panic(fmt.Sprintf("Table: %v AddField: %v failed: %v", op.TableName, op.ColumnName, err))
+				}
 			case DELETEField:
-				_db.DropColumn(op.ColumnName)
+				if err := _db.DropColumn(op.ColumnName).Error; err != nil {
+					db.Rollback()
+					panic(fmt.Sprintf("Table: %v DeleteField: %v failed: %v", op.TableName, op.ColumnName, err))
+				}
 			case ALTERField:
-				_db.ModifyColumn(op.ColumnName, op.TypeNew)
+				if err := _db.ModifyColumn(op.ColumnName, op.TypeNew).Error; err != nil {
+					db.Rollback()
+					panic(fmt.Sprintf("Table: %v AlterField: %v failed: %v", op.TableName, op.ColumnName, err))
+				}
 			case ADDIndex:
 				fmt.Println("todo: ADDIndex")
 			case ADDUniqueIndex:
 				fmt.Println("todo: ADDUniqueIndex")
 			case DELETETable:
-				_db.DropTableIfExists(op.TableName)
+				if err := _db.DropTableIfExists(op.TableName).Error; err != nil {
+					db.Rollback()
+					panic(fmt.Sprintf("Deletetable: %v failed: %v", op.TableName, err))
+				}
 			case DELETEIndex:
 				fmt.Println("todo: DELETEIndex")
 			}

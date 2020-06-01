@@ -18,17 +18,22 @@ const (
 	DELETEUniqueIndex
 )
 
+const (
+	ADDIndexStr          = "core.ADDIndex"
+	DELETEIndexStr       = "core.DELETEIndex"
+	ADDUniqueIndexStr    = "core.ADDUniqueIndex"
+	DELETEUniqueIndexStr = "core.DELETEUniqueIndex"
+)
+
 type Operation struct {
-	Action           ActionType
-	TableName        string
-	ColumnName       string
-	Type             string
-	TypeNew          string
-	IsPrimary        bool
-	IndexName        string
-	IndexFieldNames  []string
-	UniqueIndexName  string
-	UniqueFieldNames []string
+	Action          ActionType
+	TableName       string
+	ColumnName      string
+	Type            string
+	TypeNew         string
+	IsPrimary       bool
+	IndexName       string
+	IndexFieldNames []string
 }
 
 type Operations struct {

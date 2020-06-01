@@ -52,8 +52,8 @@ func (m *Migrate) MigrationsInit() error {
 	return nil
 }
 
-func (m *Migrate) MakeMigrations(migrations interface{}, tables ...interface{}) error {
-	tableFromFile, head, err := m.genTablesFromMigrationFiles(migrations)
+func (m *Migrate) MakeMigrations(tables ...interface{}) error {
+	tableFromFile, head, err := m.genTablesFromMigrationFiles(m.Migrations)
 	if err != nil {
 		return err
 	}
@@ -90,7 +90,7 @@ func (m *Migrate) MigrationsEnd(fn, latest string) string {
 		m.quoteStrToMigrations(fn), m.quoteStrToMigrations(latest))
 }
 
-func (m *Migrate) diff(exists *Table, target *Table) string {
+func (m *Migrate) diffFields(exists *Table, target *Table) string {
 	var content string
 	oldField := make(map[string]*Field)
 	newField := make(map[string]*Field)
@@ -116,8 +116,59 @@ func (m *Migrate) diff(exists *Table, target *Table) string {
 		if o != nil && n != nil && o.Type != n.Type {
 			content += m.migrationAlterFieldContent(tableName, o.Name, o.Type, n.Type)
 		}
-		// todo index  unique index
 	}
+	return content
+}
+
+func (m *Migrate) diffIndexes(exists *Table, target *Table, unique bool) string {
+	var content string
+	oldIndex := make(map[string]*Index)
+	newIndex := make(map[string]*Index)
+	indexes := make(map[string]int)
+	tableName := exists.Name
+
+	eIndexes := exists.Indexes
+	tIndexes := target.Indexes
+	if unique {
+		eIndexes = exists.UniqueIndexes
+		tIndexes = target.UniqueIndexes
+	}
+	for _, index := range eIndexes {
+		indexes[index.Name] = 1
+		oldIndex[index.Name] = index
+	}
+	for _, index := range tIndexes {
+		indexes[index.Name] = 1
+		newIndex[index.Name] = index
+	}
+	for idxName := range indexes {
+		o := oldIndex[idxName]
+		n := newIndex[idxName]
+		addAction := ADDIndexStr
+		deleteAction := DELETEIndexStr
+		if unique {
+			addAction = ADDUniqueIndexStr
+			deleteAction = DELETEUniqueIndexStr
+		}
+		if o == nil && n != nil {
+			content += m.migrationIndexContent(tableName, addAction, n.Name, n.FieldName)
+		}
+		if o != nil && n == nil {
+			content += m.migrationIndexContent(tableName, deleteAction, o.Name, o.FieldName)
+		}
+		if o != nil && n != nil && !reflect.DeepEqual(o.FieldName, n.FieldName){
+			content += m.migrationIndexContent(tableName, deleteAction, o.Name, o.FieldName)
+			content += m.migrationIndexContent(tableName, addAction, n.Name, n.FieldName)
+		}
+	}
+	return content
+}
+
+func (m *Migrate) diff(exists *Table, target *Table) string {
+	var content string
+	content += m.diffFields(exists, target)
+	content += m.diffIndexes(exists, target, false)
+	content += m.diffIndexes(exists, target, true)
 	return content
 }
 
@@ -134,6 +185,11 @@ func (m *Migrate) migrationDeleteFieldContent(tableName, fieldName string) strin
 func (m *Migrate) migrationAlterFieldContent(tableName, fieldName, old, new string) string {
 	return fmt.Sprintf("\t\t&core.Operation{Action: core.ALTERField, TableName: %v, ColumnName: %v, Type: %v, TypeNew: %v},\n",
 		m.quoteStrToMigrations(tableName), m.quoteStrToMigrations(fieldName), m.quoteStrToMigrations(old), m.quoteStrToMigrations(new))
+}
+
+func (m *Migrate) migrationIndexContent(tableName, action, indexName string, indexFields []string) string {
+	return fmt.Sprintf("\t\t&core.Operation{Action: %v, TableName: %v, IndexName: %v, IndexFieldNames: %v},\n",
+				m.quoteStrToMigrations(tableName), action, m.quoteStrToMigrations(indexName), m.quoteStrListToMigrations(indexFields))
 }
 
 func (m *Migrate) quoteStrToMigrations(str string) string {

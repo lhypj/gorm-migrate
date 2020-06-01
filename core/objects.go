@@ -11,6 +11,7 @@ type Migrate struct {
 	DB                 *gorm.DB
 	PackagePath        string
 	ModelsRelativePath string
+	Migrations         interface{}
 }
 
 type Field struct {
@@ -30,4 +31,3 @@ type Table struct {
 	Indexes       []*Index
 	UniqueIndexes []*Index
 }
-

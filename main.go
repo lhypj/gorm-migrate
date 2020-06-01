@@ -18,9 +18,9 @@ func main() {
 	defer db.Close()
 	//db.AutoMigrate()
 	//todo use conf
-	migrate := core.Migrate{DB: db, ModelsRelativePath: "/models", PackagePath: "migrate/core"}
+	migrate := core.Migrate{DB: db, ModelsRelativePath: "/models", PackagePath: "migrate/core", Migrations: &migrations.Migrations{}}
 	migrate.MigrationsInit()
-	migrate.MakeMigrations(&migrations.Migrations{}, &models.CreateTableTest{})
+	migrate.MakeMigrations(&models.CreateTableTest{})
 
-	migrate.Migrate(&migrations.Migrations{})
+	migrate.Migrate()
 }
