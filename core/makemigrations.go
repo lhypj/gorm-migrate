@@ -94,7 +94,7 @@ func (m *Migrate) diffFields(exists *Table, target *Table) string {
 			content += m.migrationAddFieldContent(tableName, n.Name, n.Type, n.IsPrimary)
 		}
 		if o != nil && n == nil {
-			content += m.migrationDeleteFieldContent(tableName, o.Name)
+			content += m.migrationDeleteFieldContent(tableName, o.Name, o.Type)
 		}
 		if o != nil && n != nil && o.Type != n.Type {
 			content += m.migrationAlterFieldContent(tableName, o.Name, o.Type, n.Type)
@@ -163,9 +163,9 @@ func (m *Migrate) migrationAddFieldContent(tableName, fieldName, fileType string
 		m.quoteStrToMigrations(tableName), m.quoteStrToMigrations(fieldName), m.quoteStrToMigrations(fileType), primaryStr)
 }
 
-func (m *Migrate) migrationDeleteFieldContent(tableName, fieldName string) string {
-	return fmt.Sprintf("\t\t&core.Operation{Action: core.DELETEField, TableName: %v, ColumnName: %v},\n",
-		m.quoteStrToMigrations(tableName), m.quoteStrToMigrations(fieldName))
+func (m *Migrate) migrationDeleteFieldContent(tableName, fieldName, fileType string) string {
+	return fmt.Sprintf("\t\t&core.Operation{Action: core.DELETEField, TableName: %v, ColumnName: %v, Type: %v},\n",
+		m.quoteStrToMigrations(tableName), m.quoteStrToMigrations(fieldName), m.quoteStrToMigrations(fileType))
 }
 
 func (m *Migrate) migrationAlterFieldContent(tableName, fieldName, old, new string) string {
@@ -218,29 +218,29 @@ func (m *Migrate) genMigrationFileContent(exists *Table, target *Table) string {
 				m.quoteStrToMigrations(target.Name), m.quoteStrToMigrations(indexName), m.quoteStrListToMigrations(index.FieldName))
 		}
 	}
-	if exists != nil {
-		if !reflect.DeepEqual(exists, target) {
-			content = m.diff(exists, target)
-		}
+	if exists != nil && !reflect.DeepEqual(exists, target){
+		content = m.diff(exists, target)
 	}
 	return content
 }
 
-func (m *Migrate) GetOperationsTree(withValid bool) *OperationsNode {
+func (m *Migrate) GetOperations() []*Operations {
 	var operations []*Operations
 	valueOf := reflect.ValueOf(m.Migrations)
 	typeOf := reflect.TypeOf(m.Migrations)
-	if valueOf.NumMethod() < 1 {
-		return nil
-	}
-
 	for i := 0; i < typeOf.NumMethod(); i++ {
-		method := typeOf.Method(i)
-		ops := valueOf.MethodByName(method.Name).Call(nil)[0].Interface().(*Operations)
-		operations = append(operations, ops)
+		operations = append(
+			operations,
+			valueOf.MethodByName(typeOf.Method(i).Name).Call(nil)[0].Interface().(*Operations),
+		)
 	}
+	return operations
+}
+
+func (m *Migrate) GetOperationsTree(withValid bool) *OperationsNode {
+	operations := m.GetOperations()
 	node := GenerateOperationsTree(&operations)
-	if withValid{
+	if withValid {
 		m.Valid(node)
 	}
 	return node

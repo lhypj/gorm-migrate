@@ -8,6 +8,7 @@ import (
 	"migrate/models/migrations"
 )
 
+
 func main() {
 
 	db, err := gorm.Open("mysql", "root:zxcvbnm123@tcp(localhost:3306)/gomigrate?parseTime=True&loc=Asia%2FShanghai")
@@ -24,5 +25,6 @@ func main() {
 	//migrate.Migrate()
 	//migrate.Fake("0005_202006011508224506000")
 	//migrate.Merge()
-	migrate.List()
+	//migrate.List()
+	migrate.DownGrade("0005_202006011508224506000")
 }
