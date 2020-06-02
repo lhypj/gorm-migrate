@@ -48,8 +48,8 @@ type OperationsNode struct {
 	Children []*OperationsNode
 }
 
-func (node *OperationsNode) IsRoot() bool {
-	return node.Ops == nil && len(node.Children) != 0
+func (n *OperationsNode) IsRoot() bool {
+	return n.Ops == nil && len(n.Children) != 0
 }
 
 func searchTree(node *OperationsNode,

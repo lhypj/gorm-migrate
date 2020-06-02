@@ -5,10 +5,8 @@ import (
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/mysql"
 	"migrate/core"
-	"migrate/models"
 	"migrate/models/migrations"
 )
-
 
 func main() {
 
@@ -21,9 +19,10 @@ func main() {
 	//todo use conf
 	migrate := core.Migrate{DB: db, ModelsRelativePath: "/models", PackagePath: "migrate/core", Migrations: &migrations.Migrations{}}
 	//migrate.MigrationsInit()
-	migrate.MakeMigrations(&models.CreateTableTest{}, &models.CreateTableTestV2{})
+	//migrate.MakeMigrations(&models.CreateTableTest{}, &models.CreateTableTestV2{})
 	//
-	migrate.Migrate()
+	//migrate.Migrate()
 	//migrate.Fake("0005_202006011508224506000")
 	//migrate.Merge()
+	migrate.List()
 }
