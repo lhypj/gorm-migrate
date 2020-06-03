@@ -20,6 +20,13 @@ func reverse(a []string) []string {
 	return a
 }
 
+func reverseOperation(a []*Operation) []*Operation {
+	for i, j := 0, len(a)-1; i < j; i, j = i+1, j-1 {
+		a[i], a[j] = a[j], a[i]
+	}
+	return a
+}
+
 func (m *Migrate) downGradeReversions(version string) []string {
 	ao := m.AppliedOrdered()
 	for i, reversion := range ao {
@@ -87,11 +94,10 @@ func (m *Migrate) tableDown(db *gorm.DB, ops *Operations, tableCreateOps map[str
 			t = append(t, op.TableName)
 		}
 		if op.Action == DELETETable {
-			tables[op.TableName] = 1
 			if tableCreateOps[op.TableName] != nil {
 				m.createTables([]*Operations{tableCreateOps[op.TableName]})
 			} else {
-				fmt.Printf("Table: %v not found, downgrade ignored", op.TableName)
+				fmt.Printf("Table: %v CREATE TABLE INFO NOT FOUND, DOWNGRADE Ignored", op.TableName)
 			}
 		}
 	}
@@ -104,7 +110,7 @@ func (m *Migrate) tableDown(db *gorm.DB, ops *Operations, tableCreateOps map[str
 func (m *Migrate) do(db *gorm.DB, ops *Operations, tableCreateOps map[string]*Operations) {
 	if ops != nil && ops.Operations != nil {
 		down := m.tableDown(db, ops, tableCreateOps)
-		for _, op := range ops.Operations {
+		for _, op := range reverseOperation(ops.Operations) {
 			tableName := op.TableName
 			if down[tableName] != 0 {
 				continue

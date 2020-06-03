@@ -1,6 +1,8 @@
 package core
 
-import "fmt"
+import (
+	"fmt"
+)
 
 func (m *Migrate) List() {
 	defer m.handleErr()()

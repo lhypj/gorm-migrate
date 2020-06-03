@@ -21,24 +21,27 @@ const (
 	NORMALTimeFormat = "2006-01-02 15:04:05"
 )
 
-func (*Migrate) rootPath() (string, error) {
+func (*Migrate) RootPath() (string, error) {
 	return os.Getwd()
 }
 
-func (m *Migrate) migrationsPath() string {
-	if path, err := m.rootPath(); err != nil {
+func (m *Migrate) ModelsPath () string {
+	if path, err := m.RootPath(); err != nil {
 		panic(err)
 	} else {
-		return path + m.ModelsRelativePath + MIGRATIONPath
+		return path + m.ModelsRelativePath
 	}
+}
 
+func (m *Migrate) MigrationsPath() string {
+	return m.ModelsPath() + MIGRATIONPath
 }
 
 func (m *Migrate) MigrationsInit() {
 	// migrate models
 	m.DB.AutoMigrate(&OrmMigrations{})
 
-	mPath := m.migrationsPath()
+	mPath := m.MigrationsPath()
 	_, err := os.Stat(mPath + "init.go")
 	if os.IsNotExist(err) {
 		m.write(INITContent, "init")
@@ -46,7 +49,7 @@ func (m *Migrate) MigrationsInit() {
 }
 
 func (m *Migrate) MakeMigrations(tables ...interface{}) {
-	defer m.handleErr()()
+	//defer m.handleErr()()
 	var content string
 	tableFromFile, head := m.genTablesFromMigrationFiles()
 	tableFromObj := m.genTableFromObject(tables...)
@@ -207,16 +210,12 @@ func (m *Migrate) genMigrationFileContent(exists *Table, target *Table) string {
 		}
 		for _, index := range target.Indexes {
 			indexName := index.Name
-			content += fmt.Sprintf(
-				"\t\t&core.Operation{Action: core.ADDIndex, TableName: %v, IndexName: %v, IndexFieldNames: %v},\n",
-				m.quoteStrToMigrations(target.Name), m.quoteStrToMigrations(indexName), m.quoteStrListToMigrations(index.FieldName))
+			content += m.migrationIndexContent(target.Name, ADDIndexStr, indexName, index.FieldName)
 		}
 
 		for _, index := range target.UniqueIndexes {
 			indexName := index.Name
-			content += fmt.Sprintf(
-				"\t\t&core.Operation{Action: core.ADDUniqueIndex, TableName: %v, UniqueIndexName: %v, UniqueFieldNames: %v},\n",
-				m.quoteStrToMigrations(target.Name), m.quoteStrToMigrations(indexName), m.quoteStrListToMigrations(index.FieldName))
+			content += m.migrationIndexContent(target.Name, ADDUniqueIndexStr, indexName, index.FieldName)
 		}
 	}
 	if exists != nil && !reflect.DeepEqual(exists, target){
@@ -335,7 +334,7 @@ func (*Migrate) genMigrationFileName(latest string) string {
 }
 
 func (m *Migrate) write(migrationString, fileName string) {
-	migrationsPath := m.migrationsPath()
+	migrationsPath := m.MigrationsPath()
 	filePath := migrationsPath + fileName + ".go"
 	f, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE, 0666)
 	defer f.Close()
@@ -347,14 +346,14 @@ func (m *Migrate) write(migrationString, fileName string) {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("%v generated success.", filePath)
+	fmt.Printf("%v generated success.\n", filePath)
 }
 
 func (m *Migrate) Heads(root *OperationsNode, ret map[string]int) {
-	if root == nil {
+	if root == nil{
 		return
 	}
-	if len(root.Children) == 0 {
+	if len(root.Children) == 0 && root.Ops != nil {
 		ret[root.Ops.Revision] += 1
 	}
 	for _, child := range root.Children {

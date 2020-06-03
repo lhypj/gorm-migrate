@@ -48,7 +48,7 @@ func searchUnApplied(node *OperationsNode, Applied map[string]int, unApplied *[]
 	for len(nodes) != 0 {
 		node = nodes[0]
 		nodes = nodes[1:]
-		if !node.IsRoot() && searched[node.Ops.Revision] == 0 {
+		if !node.IsRoot() && node.Ops != nil && searched[node.Ops.Revision] == 0 {
 			if Applied[node.Ops.Revision] != APPLIED {
 				*unApplied = append(*unApplied, node.Ops)
 			}
@@ -167,15 +167,13 @@ func (m *Migrate) Migrate() {
 	for _, operations := range unApplied {
 		migrationInfo = append(migrationInfo, operations.Revision)
 		for _, op := range operations.Operations {
-			if migrated[op.TableName] > 0 {
-				continue
-			}
+			tableCreated := migrated[op.TableName] > 0
 			_db := db.Table(op.TableName)
 			hasIndex := _db.Dialect().HasIndex(op.TableName, op.IndexName)
 			hasColumn := _db.Dialect().HasColumn(op.TableName, op.ColumnName)
 			switch op.Action {
 			case ADDField:
-				if !hasColumn {
+				if !hasColumn && !tableCreated {
 					scope := _db.NewScope(op.TableName)
 					if err := scope.Raw(fmt.Sprintf("ALTER TABLE %v ADD COLUMN %v %v",
 						scope.QuotedTableName(), scope.Quote(op.ColumnName), op.Type)).Exec().DB().Error; err != nil {

@@ -1,6 +1,8 @@
 package core
 
-import "fmt"
+import (
+	"fmt"
+)
 
 func (m *Migrate) unAppliedList() map[string]int {
 	ret := make(map[string]int)

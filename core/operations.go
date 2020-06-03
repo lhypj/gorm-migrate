@@ -183,6 +183,6 @@ func GenerateOperationsTree(operations *[]*Operations) *OperationsNode {
 	return node
 }
 
-func (ops OperationSlice) Len() int {return len(ops)}
-func (ops OperationSlice) Swap(i, j int) {ops[i], ops[j] = ops[j], ops[i]}
+func (ops OperationSlice) Len() int           {return len(ops)}
+func (ops OperationSlice) Swap(i, j int)      {ops[i], ops[j] = ops[j], ops[i]}
 func (ops OperationSlice) Less(i, j int) bool {return ops[i].Revision < ops[j].Revision}

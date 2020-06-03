@@ -12,6 +12,7 @@ type Migrate struct {
 	PackagePath        string
 	ModelsRelativePath string
 	Migrations         interface{}
+	Models             []interface{}
 }
 
 type Field struct {
