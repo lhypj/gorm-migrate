@@ -25,6 +25,6 @@ func main() {
 	//migrate.Migrate()
 	//migrate.Fake("0005_202006011508224506000")
 	//migrate.Merge()
-	//migrate.List()
-	migrate.DownGrade("0005_202006011508224506000")
+	migrate.List()
+	//migrate.DownGrade("0005_202006011508224506000")
 }

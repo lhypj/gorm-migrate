@@ -14,16 +14,20 @@ func (m *Migrate) unAppliedList() map[string]int {
 
 func (m *Migrate) Fake(version string) {
 	if version == "" {
-		panic(fmt.Sprintf("version %v is blank", version))
+		fmt.Printf("version %v is blank", version)
+		return
 	}
 	if m.Applied()[version] == APPLIED {
-		panic(fmt.Sprintf("version %v is applied", version))
+		fmt.Printf("version %v is applied", version)
+		return
 	}
 	if m.unAppliedList()[version] == 0 {
-		panic(fmt.Sprintf("version %v not found", version))
+		fmt.Printf("version %v not found", version)
+		return
 	}
 	if err := m.DB.Create(&OrmMigrations{Name: version}); err != nil {
-		panic(err)
+		fmt.Println(err.Error)
+	} else {
+		fmt.Printf("Fake: %v successful!", version)
 	}
-	fmt.Printf("Fake: %v successful!", version)
 }

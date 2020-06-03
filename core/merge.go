@@ -41,6 +41,8 @@ func (m *Migrate) MigrationsMergeContent(fn string, heads []string) string {
 }
 
 func (m *Migrate) Merge() {
+	defer m.handleErr()()
+
 	node := m.GetOperationsTree(false)
 	heads := m.HeadToString(node)
 	if len(heads) < 2 {

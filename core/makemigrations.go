@@ -46,6 +46,7 @@ func (m *Migrate) MigrationsInit() {
 }
 
 func (m *Migrate) MakeMigrations(tables ...interface{}) {
+	defer m.handleErr()()
 	var content string
 	tableFromFile, head := m.genTablesFromMigrationFiles()
 	tableFromObj := m.genTableFromObject(tables...)

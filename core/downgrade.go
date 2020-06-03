@@ -46,11 +46,16 @@ func (m *Migrate) DownGrade(version string) {
 	defer func() {
 		if err := recover(); err != nil {
 			db.Rollback()
-			panic(err)
-		}
-		db.Commit()
-		for _, version := range versions {
-			fmt.Printf("DownGrade:%v downgrade success!\n", version)
+			if x, ok := err.(error); ok {
+				fmt.Println(x.Error())
+			} else {
+				fmt.Println(err)
+			}
+		} else {
+			db.Commit()
+			for _, version := range versions {
+				fmt.Printf("DownGrade:%v downgrade success!\n", version)
+			}
 		}
 	}()
 
@@ -69,7 +74,7 @@ func (m *Migrate) DownGrade(version string) {
 		m.do(db, rvOps[vs], tableCreateOps)
 	}
 	if err := db.Unscoped().Where("name in (?)", versions).Delete(&OrmMigrations{}); err != nil {
-		panic(err.Error)
+		panic(err)
 	}
 }
 
@@ -91,7 +96,7 @@ func (m *Migrate) tableDown(db *gorm.DB, ops *Operations, tableCreateOps map[str
 		}
 	}
 	if err := db.DropTableIfExists(t...).Error; err != nil {
-		panic(fmt.Sprintf("Delete table failed: %v", err.Error()))
+		panic(err)
 	}
 	return tables
 }
@@ -111,7 +116,7 @@ func (m *Migrate) do(db *gorm.DB, ops *Operations, tableCreateOps map[string]*Op
 			case ADDField:
 				if hasColumn {
 					if err := _db.DropColumn(op.ColumnName).Error; err != nil {
-						panic(fmt.Sprintf("Table: %v DeleteField: %v failed: %v", op.TableName, op.ColumnName, err.Error()))
+						panic(err)
 					}
 				}
 			case DELETEField:
@@ -119,37 +124,37 @@ func (m *Migrate) do(db *gorm.DB, ops *Operations, tableCreateOps map[string]*Op
 					scope := _db.NewScope(op.TableName)
 					if err := scope.Raw(fmt.Sprintf("ALTER TABLE %v ADD COLUMN %v %v",
 						scope.QuotedTableName(), scope.Quote(op.ColumnName), op.Type)).Exec().DB().Error; err != nil {
-						panic(fmt.Sprintf("Table: %v AddField: %v failed: %v", op.TableName, op.ColumnName, err.Error()))
+						panic(err)
 					}
 				}
 			case ALTERField:
 				if hasColumn {
 					if err := _db.ModifyColumn(op.ColumnName, op.Type).Error; err != nil {
-						panic(fmt.Sprintf("Table: %v AlterField: %v failed: %v", op.TableName, op.ColumnName, err.Error()))
+						panic(err)
 					}
 				}
 			case ADDIndex:
 				if hasIndex {
 					if err := _db.RemoveIndex(op.IndexName).Error; err != nil {
-						panic(fmt.Sprintf("Table: %v RemoveIndex: %v failed: %v", op.TableName, op.IndexName, err.Error()))
+						panic(err)
 					}
 				}
 			case ADDUniqueIndex:
 				if hasIndex {
 					if err := _db.RemoveIndex(op.IndexName).Error; err != nil {
-						panic(fmt.Sprintf("Table: %v RemoveUniqueIndex: %v failed: %v", op.TableName, op.IndexName, err.Error()))
+						panic(err)
 					}
 				}
 			case DELETEIndex:
 				if !hasIndex {
 					if err := _db.AddIndex(op.IndexName, op.IndexFieldNames...).Error; err != nil {
-						panic(fmt.Sprintf("Table: %v AddIndex: %v failed: %v", op.TableName, op.IndexName, err.Error()))
+						panic(err)
 					}
 				}
 			case DELETEUniqueIndex:
 				if !hasIndex {
 					if err := _db.AddUniqueIndex(op.IndexName, op.IndexFieldNames...).Error; err != nil {
-						panic(fmt.Sprintf("Table: %v AddUniqueIndex: %v failed: %v", op.TableName, op.IndexName, err.Error()))
+						panic(err)
 					}
 				}
 			}

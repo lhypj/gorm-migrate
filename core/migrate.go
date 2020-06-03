@@ -73,11 +73,6 @@ func (m *Migrate) UnApplied() []*Operations {
 	var allOperations []*Operations
 	root := m.GetOperationsTree(true)
 	searchUnApplied(root, m.Applied(), &unApplied, &allOperations)
-	// todo 本地多分支开发、其他分支先于本分支生成migration file，但本地已migrate，此时会出现这个错误。发生冲突操作，比如修改了同一个索引值，是不是要下沉操作到merge 中?
-	if !checkUnApplied(unApplied, allOperations) {
-		panic("UnApplied migrations err, use List and Fake or Migrate commands to help you")
-	}
-
 	sort.Sort(OperationSlice(unApplied))
 	return unApplied
 }
@@ -155,12 +150,16 @@ func (m *Migrate) Migrate() {
 	defer func() {
 		if err := recover(); err != nil {
 			db.Rollback()
-			panic(err)
-		}
-
-		db.Commit()
-		for _, info := range migrationInfo {
-			fmt.Printf("Migrations:%v migrate success!\n", info)
+			if v, ok := err.(error); ok {
+				fmt.Println(v.Error())
+			} else {
+				fmt.Println(err)
+			}
+		} else {
+			db.Commit()
+			for _, info := range migrationInfo {
+				fmt.Printf("Migrations:%v migrate success!\n", info)
+			}
 		}
 	}()
 
@@ -180,49 +179,49 @@ func (m *Migrate) Migrate() {
 					scope := _db.NewScope(op.TableName)
 					if err := scope.Raw(fmt.Sprintf("ALTER TABLE %v ADD COLUMN %v %v",
 						scope.QuotedTableName(), scope.Quote(op.ColumnName), op.Type)).Exec().DB().Error; err != nil {
-						panic(fmt.Sprintf("Table: %v AddField: %v failed: %v", op.TableName, op.ColumnName, err.Error()))
+						panic(err)
 					}
 				}
 			case DELETEField:
 				if hasColumn {
 					if err := _db.DropColumn(op.ColumnName).Error; err != nil {
-						panic(fmt.Sprintf("Table: %v DeleteField: %v failed: %v", op.TableName, op.ColumnName, err.Error()))
+						panic(err)
 					}
 				}
 			case ALTERField:
 				if hasColumn {
 					if err := _db.ModifyColumn(op.ColumnName, op.TypeNew).Error; err != nil {
-						panic(fmt.Sprintf("Table: %v AlterField: %v failed: %v", op.TableName, op.ColumnName, err.Error()))
+						panic(err)
 					}
 				}
 
 			case ADDIndex:
 				if !hasIndex {
 					if err := _db.AddIndex(op.IndexName, op.IndexFieldNames...).Error; err != nil {
-						panic(fmt.Sprintf("Table: %v AddIndex: %v failed: %v", op.TableName, op.IndexName, err.Error()))
+						panic(err)
 					}
 				}
 
 			case ADDUniqueIndex:
 				if !hasIndex {
 					if err := _db.AddUniqueIndex(op.IndexName, op.IndexFieldNames...).Error; err != nil {
-						panic(fmt.Sprintf("Table: %v AddUniqueIndex: %v failed: %v", op.TableName, op.IndexName, err.Error()))
+						panic(err)
 					}
 				}
 			case DELETETable:
 				if err := _db.DropTableIfExists(op.TableName).Error; err != nil {
-					panic(fmt.Sprintf("Deletetable: %v failed: %v", op.TableName, err.Error()))
+					panic(err)
 				}
 			case DELETEIndex:
 				if hasIndex {
 					if err := _db.RemoveIndex(op.IndexName).Error; err != nil {
-						panic(fmt.Sprintf("Table: %v RemoveIndex: %v failed: %v", op.TableName, op.IndexName, err.Error()))
+						panic(err)
 					}
 				}
 			case DELETEUniqueIndex:
 				if hasIndex {
 					if err := _db.RemoveIndex(op.IndexName).Error; err != nil {
-						panic(fmt.Sprintf("Table: %v RemoveUniqueIndex: %v failed: %v", op.TableName, op.IndexName, err.Error()))
+						panic(err)
 					}
 				}
 			}
