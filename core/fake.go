@@ -27,8 +27,8 @@ func (m *Migrate) Fake(version string) {
 		fmt.Printf("version %v not found", version)
 		return
 	}
-	if err := m.DB.Create(&OrmMigrations{Name: version}); err != nil {
-		fmt.Println(err.Error)
+	if err := m.DB.Create(&OrmMigrations{Name: version}).Error; err != nil {
+		fmt.Println(err)
 	} else {
 		fmt.Printf("Fake: %v successful!", version)
 	}

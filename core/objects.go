@@ -7,12 +7,21 @@ type OrmMigrations struct {
 	Name string `gorm:"unique;not null;size:30"`
 }
 
+const PACKAGEPATH = "github.com/lhypj/gorm-migrate/core"
+
 type Migrate struct {
 	DB                 *gorm.DB
 	PackagePath        string
 	ModelsRelativePath string
 	Migrations         interface{}
 	Models             []interface{}
+}
+
+func (m *Migrate)getPackagePath () string{
+	if m.PackagePath == "" {
+		return PACKAGEPATH
+	}
+	return m.PackagePath
 }
 
 type Field struct {

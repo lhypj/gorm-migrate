@@ -37,7 +37,7 @@ func (m *Migrate) quoteMergeDownRevisionAndEnd(str []string) string {
 
 func (m *Migrate) MigrationsMergeContent(fn string, heads []string) string {
 	return fmt.Sprintf("package migrations\n\nimport %v\n\nfunc (*Migrations) Migration_%v() *migrate.Operations {\n\treturn &migrate.Operations{\n\t\tOperations: []*migrate.Operation{},\n\t\tRevision:   %v,\n\t\tDownRevision: %v",
-		m.quoteStrToMigrations(m.PackagePath), fn, m.quoteStrToMigrations(fn), m.quoteMergeDownRevisionAndEnd(heads))
+		m.quoteStrToMigrations(m.getPackagePath()), fn, m.quoteStrToMigrations(fn), m.quoteMergeDownRevisionAndEnd(heads))
 }
 
 func (m *Migrate) Merge() {

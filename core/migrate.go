@@ -141,7 +141,7 @@ func (m *Migrate) createTables(unApplied []*Operations) map[string]int {
 func (m *Migrate) Migrate() {
 	unApplied := m.UnApplied()
 	if len(unApplied) == 0 {
-		fmt.Println("No UnApplied migrations need to migrate")
+		fmt.Println("No unApplied migrations need to migrate")
 		return
 	}
 	var migrationInfo []string

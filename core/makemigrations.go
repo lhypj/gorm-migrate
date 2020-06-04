@@ -48,9 +48,10 @@ func (m *Migrate) MigrationsInit() {
 	}
 }
 
-func (m *Migrate) MakeMigrations(tables ...interface{}) {
-	//defer m.handleErr()()
+func (m *Migrate) MakeMigrations() {
+	defer m.handleErr()
 	var content string
+	tables := m.Models
 	tableFromFile, head := m.genTablesFromMigrationFiles()
 	tableFromObj := m.genTableFromObject(tables...)
 	fn := m.genMigrationFileName(head)
@@ -69,7 +70,7 @@ func (m *Migrate) MakeMigrations(tables ...interface{}) {
 
 func (m *Migrate) MigrationsPre(fn string) string {
 	return fmt.Sprintf("package migrations\n\nimport %v\n\nfunc (*Migrations) Migration_%v() *core.Operations {\n\tvar ops []*core.Operation\n\tops = append(ops,\n",
-		m.quoteStrToMigrations(m.PackagePath), fn)
+		m.quoteStrToMigrations(m.getPackagePath()), fn)
 }
 
 func (m *Migrate) MigrationsEnd(fn string, latest []string) string {

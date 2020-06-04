@@ -80,7 +80,7 @@ func (m *Migrate) DownGrade(version string) {
 	for _, vs := range versions {
 		m.do(db, rvOps[vs], tableCreateOps)
 	}
-	if err := db.Unscoped().Where("name in (?)", versions).Delete(&OrmMigrations{}); err != nil {
+	if err := db.Unscoped().Where("name in (?)", versions).Delete(&OrmMigrations{}).Error; err != nil {
 		panic(err)
 	}
 }
