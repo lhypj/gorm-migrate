@@ -22,8 +22,6 @@ func main() {
 
 	m := core.Migrate{
 		DB:                 db,
-		ModelsRelativePath: "/examples/models",
-		PackagePath:        "migrate/core",
 		Migrations:         &migrations.Migrations{},
 		Models:             mds,
 	}
