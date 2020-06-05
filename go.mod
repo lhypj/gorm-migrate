@@ -1,4 +1,4 @@
-module dm-gitlab.bolo.me/hubpd/go-migrate
+module dm-gitlab.bolo.me/hubpd/gorm-migrate
 
 
 go 1.14
