@@ -7,7 +7,7 @@ type OrmMigrations struct {
 	Name string `gorm:"unique;not null;size:30"`
 }
 
-const PACKAGEPATH = "dm-gitlab.bolo.me/hubpd/gorm-migrate/core"
+const PACKAGEPATH = "dm-gitlab.bolo.me/hubpd/go-migrate/core"
 
 type Migrate struct {
 	DB                 *gorm.DB

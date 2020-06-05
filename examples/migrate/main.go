@@ -4,9 +4,9 @@ import (
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jinzhu/gorm"
-	"dm-gitlab.bolo.me/hubpd/gorm-migrate/core"
-	"dm-gitlab.bolo.me/hubpd/gorm-migrate/examples/migrate/migrations"
-	"dm-gitlab.bolo.me/hubpd/gorm-migrate/examples/models"
+	"dm-gitlab.bolo.me/hubpd/go-migrate/core"
+	"dm-gitlab.bolo.me/hubpd/go-migrate/examples/migrate/migrations"
+	"dm-gitlab.bolo.me/hubpd/go-migrate/examples/models"
 )
 
 func main() {

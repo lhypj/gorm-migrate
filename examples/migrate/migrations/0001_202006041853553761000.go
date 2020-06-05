@@ -1,6 +1,6 @@
 package migrations
 
-import "dm-gitlab.bolo.me/hubpd/gorm-migrate/core"
+import "dm-gitlab.bolo.me/hubpd/go-migrate/core"
 
 func (*Migrations) Migration_0001_202006041853553761000() *core.Operations {
 	var ops []*core.Operation
