@@ -150,11 +150,8 @@ func (m *Migrate) Migrate() {
 	defer func() {
 		if err := recover(); err != nil {
 			db.Rollback()
-			if v, ok := err.(error); ok {
-				fmt.Println(v.Error())
-			} else {
-				fmt.Println(err)
-			}
+			fmt.Println("Migrate failed!")
+			panic(err)
 		} else {
 			db.Commit()
 			for _, info := range migrationInfo {
