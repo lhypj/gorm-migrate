@@ -1,21 +1,11 @@
 package core
 
-import (
-	"flag"
-)
-
-type Args struct {
+type M struct {
 	Command   string `required:"true"`
 	Reversion string
 }
 
-func (m *Migrate) Run() {
-	var showUsage bool
-	var command, reversion string
-	flag.StringVar(&command, "c", "", "commands: makemigrations migrate merge fake list downgrade")
-	flag.StringVar(&reversion, "v", "", "specify a reversion to downgrade or fake")
-
-	flag.Parse()
+func (m *Migrate) Run(command, reversion string) {
 	switch command {
 	case "migrate":
 		m.Migrate()
@@ -24,23 +14,14 @@ func (m *Migrate) Run() {
 	case "merge":
 		m.Merge()
 	case "fake":
-		if reversion == "" {
-			showUsage = true
-		} else {
+		if reversion != "" {
 			m.Fake(reversion)
 		}
 	case "list":
 		m.List()
 	case "downgrade":
-		if reversion == "" {
-			showUsage = true
-		} else {
+		if reversion != "" {
 			m.DownGrade(reversion)
 		}
-	default:
-		showUsage = true
-	}
-	if showUsage {
-		flag.Usage()
 	}
 }
