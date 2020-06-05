@@ -1,4 +1,5 @@
-module github.com/lhypj/gorm-migrate
+module dm-gitlab.bolo.me/hubpd/go-migrate
+
 
 go 1.14
 
