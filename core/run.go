@@ -1,8 +1,9 @@
 package core
 
-type M struct {
-	Command   string `required:"true"`
+type MIGRATE struct {
+	Command   string
 	Reversion string
+	DBDsn     string
 }
 
 func (m *Migrate) Run(command, reversion string) {

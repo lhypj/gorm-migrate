@@ -6,17 +6,11 @@ import (
 	"sync"
 )
 
-type Hubpd struct {
-	core.M
-	DBDsn string
-}
-
-var once sync.Once
-var c *Hubpd
-
-func GetConfig() *Hubpd {
+func GetMIGRATEConfig() *core.MIGRATE {
+	var once sync.Once
+	var c *core.MIGRATE
 	once.Do(func() {
-		c = new(Hubpd)
+		c = new(core.MIGRATE)
 		m := multiconfig.New()
 		m.MustLoad(c)
 	})
@@ -24,5 +18,5 @@ func GetConfig() *Hubpd {
 }
 
 func init() {
-	GetConfig()
+	GetMIGRATEConfig()
 }

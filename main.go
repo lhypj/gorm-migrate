@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	c := config.GetConfig()
+	c := config.GetMIGRATEConfig()
 	m := core.Migrate{
 		DB:                 models.GetInstance(),
 		Migrations:         &migrations.Migrations{},
@@ -16,10 +16,10 @@ func main() {
 		ModelsRelativePath: "/examples",
 	}
 	m.Run(c.Command, c.Reversion)
-
-	// HUBPD_DBDSN="xxx" go run main.go -m-command makemigrations
-	// HUBPD_DBDSN="xxx" go run main.go -m-command migrate
-	// HUBPD_DBDSN="xxx" go run main.go -m-command downgrade -m-reversion 0001_2020060518042059962000
-	// HUBPD_DBDSN="xxx" go run main.go -m-command fake -m-reversion 0001_2020060518042059962000
+	// MIGRATE_DBDSN="xxx" go run main.go -command makemigrations
+	// MIGRATE_DBDSN="xxx" go run main.go -command migrate
+	// MIGRATE_DBDSN="xxx" go run main.go -command downgrade -m-reversion 0001_2020060518042059962000
+	// MIGRATE_DBDSN="xxx" go run main.go -command fake -m-reversion 0001_2020060518042059962000
 	//
+
 }

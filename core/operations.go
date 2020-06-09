@@ -48,10 +48,6 @@ type OperationsNode struct {
 	Children []*OperationsNode
 }
 
-func (n *OperationsNode) IsRoot() bool {
-	return n.Ops == nil && len(n.Children) != 0
-}
-
 func searchTree(node *OperationsNode,
 	tableFieldType map[string]map[string]string,
 	tableIndexes map[string]map[string][]string,

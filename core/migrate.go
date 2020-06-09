@@ -48,7 +48,7 @@ func searchUnApplied(node *OperationsNode, Applied map[string]int, unApplied *[]
 	for len(nodes) != 0 {
 		node = nodes[0]
 		nodes = nodes[1:]
-		if !node.IsRoot() && node.Ops != nil && searched[node.Ops.Revision] == 0 {
+		if node.Ops != nil && searched[node.Ops.Revision] == 0 {
 			if Applied[node.Ops.Revision] != APPLIED {
 				*unApplied = append(*unApplied, node.Ops)
 			}

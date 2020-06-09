@@ -16,7 +16,7 @@ var once sync.Once
 func GetInstance() *gorm.DB {
 	once.Do(func() {
 		var err error
-		dsn := config.GetConfig().DBDsn
+		dsn := config.GetMIGRATEConfig().DBDsn
 		if len(dsn) == 0 {
 			log.Fatal("Failed to get database dsn")
 		}
