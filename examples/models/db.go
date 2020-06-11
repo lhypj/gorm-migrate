@@ -29,3 +29,7 @@ func GetInstance() *gorm.DB {
 	})
 	return instance
 }
+
+func init() {
+	GetInstance()
+}

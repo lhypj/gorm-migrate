@@ -7,26 +7,22 @@ import (
 	"github.com/lhypj/gorm-migrate/examples/models"
 )
 
-
 func main() {
-
 	c := config.GetConfig()
-	migrate := migrate.Migrate{
-		DB: models.GetInstance(),
-		//ModelsRelativePath: "/examples",
-		Migrations: &migrations.Migrations{},
-		Models: []interface{}{
-			&models.CreateTableTest{},
-			&models.CreateTableTestV2{},
-		},
+	db := models.GetInstance()
+	if c.Migrate {
+		m := migrate.Migrate{
+			DB:         db,
+			Migrations: &migrations.Migrations{},
+			Models: []interface{}{
+				&models.CreateTableTest{},
+				&models.CreateTableTestV2{},
+			},
+		}
+		m.MigrationsInit()
+		m.Run(c.Command, c.Reversion)
+		return
 	}
-	migrate.MigrationsInit()
-	migrate.Run(c.Command, c.Reversion)
-	//
-	//migrate.Migrate()
-	//migrate.Fake("0005_202006011508224506000")
-	//migrate.Merge()
-	//migrate.List()
-	//migrate.DownGrade("0005_202006011508224506000")
+	//  COMMAND_DBDSN="xxx" go run main.go -command migrate -migrate
+	// other env handle ...
 }
-

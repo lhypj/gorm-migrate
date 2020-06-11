@@ -17,6 +17,6 @@ func (m *Migrate) Run(command, reversion string) {
 	case "downgrade":
 		m.DownGrade(reversion)
 	default:
-		fmt.Println("Command migrate、makemigrations、merge、fake、list、downgrade")
+		fmt.Printf("Allowed Command: makemigrations migrate merge fake list downgrade\n")
 	}
 }

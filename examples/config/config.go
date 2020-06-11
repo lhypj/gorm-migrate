@@ -5,18 +5,25 @@ import (
 	"sync"
 )
 
-type MigrateLoader struct {
-	DBDsn     string `default:"root:zxcvbnm123@tcp(localhost:3306)/TestDb?parseTime=True&loc=Asia%2FShanghai"`
+
+type Command struct {
+	GrpcServerAddress string
+	ConsumerGroupID   string
+	SentryDsn         string
+	KafkaHosts        []string
+	DBDsn             string
+
+	Migrate   bool
 	Command   string
 	Reversion string
 }
 
 var once sync.Once
-var c *MigrateLoader
+var c *Command
 
-func GetConfig() *MigrateLoader {
+func GetConfig() *Command {
 	once.Do(func() {
-		c = new(MigrateLoader)
+		c = new(Command)
 		m := multiconfig.New()
 		m.MustLoad(c)
 	})
